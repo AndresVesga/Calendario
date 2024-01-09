@@ -1,0 +1,15 @@
+let
+  Origen = {AñoInicio..AñoFin},
+  #"Convertida en tabla" = Table.FromList(Origen, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+  #"Columnas con nombre cambiado" = Table.RenameColumns(#"Convertida en tabla", {{"Column1", "Año"}}),
+  #"Tipo cambiado" = Table.TransformColumnTypes(#"Columnas con nombre cambiado", {{"Año", type text}}),
+  #"Personalizado agregado" = Table.TransformColumnTypes(Table.AddColumn(#"Tipo cambiado", "colombia", each "colombia"), {{"colombia", type text}}),
+  #"Función personalizada invocada" = Table.AddColumn(#"Personalizado agregado", "Función personalizada invocada", each CuandoEnElMundo([Año], [colombia])),
+  #"Función personalizada invocada expandido" = Table.ExpandTableColumn(#"Función personalizada invocada", "Función personalizada invocada", {"Festividad", "Dia-mes"}, {"Festividad", "Dia-mes"}),
+  #"Columna combinada insertada" = Table.AddColumn(#"Función personalizada invocada expandido", "Fecha", each Text.Combine({Text.From([#"Dia-mes"]), [Año]}, "/"), type text),
+  #"Tipo de columna cambiado" = Table.TransformColumnTypes(#"Columna combinada insertada", {{"Fecha", type date}}),
+  #"Transformar columnas" = Table.TransformColumnTypes(#"Tipo de columna cambiado", {{"Festividad", type text}, {"Dia-mes", type text}}),
+  #"Reemplazar errores" = Table.ReplaceErrorValues(#"Transformar columnas", {{"Festividad", null}, {"Dia-mes", null}}),
+  #"Duplicados quitados" = Table.Distinct(#"Reemplazar errores", {"Fecha"})
+in
+  #"Duplicados quitados"
