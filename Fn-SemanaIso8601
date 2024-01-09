@@ -1,0 +1,75 @@
+let
+    getISO8601Week = (someDate as date) =>
+        let
+            getDayOfWeek = (d as date) =>
+                let
+                    result = 1 + Date.DayOfWeek(d, Day.Monday)
+                in
+                    result,
+
+            getNaiveWeek = (inDate as date) =>
+                let
+                    // monday = 1, sunday = 7
+                    weekday = getDayOfWeek(inDate),
+
+                    weekdayOfJan4th = getDayOfWeek(#date(Date.Year(inDate), 1, 4)),
+
+                    ordinal = Date.DayOfYear(inDate),
+
+                    naiveWeek = Number.RoundDown(
+                        (ordinal - weekday + 10) / 7
+                    )
+                in
+                    naiveWeek,
+
+            thisYear = Date.Year(someDate),
+
+            priorYear = thisYear - 1,
+
+            nwn = getNaiveWeek(someDate),
+
+            lastWeekOfPriorYear =
+                getNaiveWeek(#date(priorYear, 12, 28)),
+
+            // http://stackoverflow.com/a/34092382/2014893
+            lastWeekOfThisYear =
+                getNaiveWeek(#date(thisYear, 12, 28)),
+
+            weekYear =
+                if
+                    nwn < 1
+                then
+                    priorYear
+                else
+                    if
+                        nwn > lastWeekOfThisYear
+                    then
+                        thisYear + 1
+                    else
+                        thisYear,
+
+            weekNumber =
+                if
+                    nwn < 1
+                then
+                    lastWeekOfPriorYear
+                else
+                    if
+                        nwn > lastWeekOfThisYear
+                    then
+                        1
+                    else
+                        nwn,
+
+            week_dateString =
+                Text.PadStart(
+                    Text.From(
+                        Number.RoundDown(weekNumber)
+                    ),
+                    2,
+                    "0"
+                )
+        in
+            week_dateString
+in
+    getISO8601Week
