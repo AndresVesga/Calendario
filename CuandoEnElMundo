@@ -1,0 +1,13 @@
+let
+    Origen = (anho as text, optional pais as text) =>
+
+let
+    Origen = Web.Contents("https://www.cuandoenelmundo.com/calendario/", [RelativePath = pais &"/"&anho]),
+    #"Tabla extraída a partir de HTML" = Html.Table(Origen, {{"Column1", ".day"}, {"Column2", ".day + *"}, {"Column3", ".desc"}}, [RowSelector=".hdays TR"]),
+    #"Tipo cambiado" = Table.TransformColumnTypes(#"Tabla extraída a partir de HTML",{{"Column1", Int64.Type}, {"Column2", type text}, {"Column3", type text}}),
+    #"Personalizada agregada" = Table.AddColumn(#"Tipo cambiado", "Dia-mes", each Number.ToText([Column1]) & "/" & [Column2]),
+    ColumnasNombreCambiado = Table.RenameColumns(  #"Personalizada agregada", {{"Column3", "Festividad"}} )
+in
+    #"ColumnasNombreCambiado"
+in
+    Origen
