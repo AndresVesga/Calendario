@@ -1,0 +1,95 @@
+/*Este calendario ha sido creado para consumir desde DataFlows de Power Bi*/
+let
+  // ****Calendario creado por Fabián Andrés Garzón Vesga
+  #"Creación de Nuevo Calendario Popsy" = 1,
+  StartDate = #date(AñoInicio, 1, 1),
+  EndDate = Date.EndOfYear(DateTime.Date(DateTime.FixedLocalNow())),
+  // A continuación, se añade parámetro: FechaActual para realizar campos calculados de desvíos.
+  FechaActual = DateTime.Date(DateTime.FixedLocalNow()),
+  // *-----------------------------------------------------------------------------------------------------------------------------*//
+  #"----Proceso de creación de tabla Calendario----" = 1,
+  ListDates = List.Dates(StartDate, Number.From(EndDate - StartDate) +1, #duration(1,0,0,0)),
+  #"Convertir a Tabla" = Table.FromList(ListDates, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+  #"Cambiar nombre a Fecha" = Table.RenameColumns(#"Convertir a Tabla", {{"Column1", "Fecha"}}),
+  #"Cambiar Fecha a Tipo Date" = Table.TransformColumnTypes(#"Cambiar nombre a Fecha", {{"Fecha", type date}}),
+  #"----Añadir columnas del calendario----" = #"Cambiar Fecha a Tipo Date",
+  #"Add MesNumero" = Table.AddColumn(#"----Añadir columnas del calendario----", "MesNumero", each Date.Month([Fecha]), Int64.Type),
+  #"Add NombreMesCorto" = Table.AddColumn(#"Add MesNumero", "NombreMesCorto", each Text.Start(Date.MonthName([Fecha]), 3), type text),
+  NombreMesCorto.Proper = Table.TransformColumns(#"Add NombreMesCorto", {{"NombreMesCorto", each Text.Proper(_), type text}}),
+  #"Add NombreMesLargo" = Table.AddColumn(NombreMesCorto.Proper, "NombreMesLargo", each Date.MonthName([Fecha]), type text),
+  NombreMesLargo.Proper = Table.TransformColumns(#"Add NombreMesLargo", {{"NombreMesLargo", each Text.Proper(_), type text}}),
+  #"Add Trimestre" = Table.AddColumn(NombreMesLargo.Proper, "Trimestre", each "Q" & Text.From(Date.QuarterOfYear([Fecha])), type text),
+  #"Add Año" = Table.AddColumn(#"Add Trimestre", "Año", each Date.Year([Fecha]), Int64.Type),
+  #"----Añadir Columnas Add Calendario----" = #"Add Año",
+  #"Add AñoMes_Numero" = Table.AddColumn(#"----Añadir Columnas Add Calendario----", "AñoMesNumero", each [Año] * 100 + [MesNumero], Int64.Type),
+  #"Add MesCortoAño" = Table.AddColumn(#"Add AñoMes_Numero", "MesCortoAño", each [NombreMesCorto] & "-" & Text.End ( Text.From( [Año] ), 2 )),
+  #"Add MesLargoAño" = Table.AddColumn(#"Add MesCortoAño", "MesLargoAño", each [NombreMesLargo] & "-" & Text.End ( Text.From( [Año] ), 2 )),
+  #"Add DiaSemana" = Table.AddColumn(#"Add MesLargoAño", "DiaSemana", each Date.DayOfWeek([Fecha], Day.Monday)+ 1, type nullable number),
+  #"Add NombreDiaSemana" = Table.AddColumn(#"Add DiaSemana", "NombreDiaLargo", each Date.DayOfWeekName([Fecha]), type nullable text),
+  NombreDiaSemana.Proper = Table.TransformColumns(#"Add NombreDiaSemana", {{"NombreDiaLargo", each Text.Proper(_), type nullable text}}),
+  #"Add NombreDiaCorto" = Table.AddColumn(NombreDiaSemana.Proper, "NombreDiaCorto", each Text.Start([NombreDiaLargo], 3), type text),
+  #"Add EsFinDeSemana" = Table.AddColumn(#"Add NombreDiaCorto", "EsFinDeSemana", each if [DiaSemana] = 6 or [DiaSemana] = 7 then "FinDeSemana" else "NoFinDeSemana"),
+  MejoramientoTabla = #"Add EsFinDeSemana",
+  #"----AddIndiceSemanas----" = MejoramientoTabla,
+  #"FiltroFilasDomingos (inicio de semana)" = Table.SelectRows(#"----AddIndiceSemanas----", each [DiaSemana] = 1),
+  #"Add Indice a Semanas" = Table.AddIndexColumn(#"FiltroFilasDomingos (inicio de semana)", "IndiceSemana", 2, 1),
+  #"CombinarTabla con MejoramientoTabla" = Table.NestedJoin(MejoramientoTabla, {"Fecha"}, #"Add Indice a Semanas", {"Fecha"}, "IndiceAñadidoSemana", JoinKind.LeftOuter),
+  #"Expandir IndiceSemana" = Table.ExpandTableColumn(#"CombinarTabla con MejoramientoTabla", "IndiceAñadidoSemana", {"IndiceSemana"}, {"IndiceSemana"}),
+  #"Reordenar Columna Fechas" = Table.Sort(#"Expandir IndiceSemana", {{"Fecha", Order.Ascending}}),
+  #"Rellenar Hacia Abajo IndiceSemana" = Table.FillDown(#"Reordenar Columna Fechas", {"IndiceSemana"}),
+  #"Reemplazar IndiceSemana null Por 1" = Table.ReplaceValue(#"Rellenar Hacia Abajo IndiceSemana", null, 1, Replacer.ReplaceValue, {"IndiceSemana"}),
+  #"Inicio de la semana insertado" = Table.AddColumn(#"Reemplazar IndiceSemana null Por 1", "Inicio de la semana", each Date.StartOfWeek([Fecha]), type nullable date),
+  #"Semana del año insertada" = Table.AddColumn(#"Inicio de la semana insertado", "Semana del año", each Date.WeekOfYear([Fecha]), type nullable number),
+  #"Add SemanaIso8601" = Table.AddColumn(#"Semana del año insertada", "SemanaIso", each SemanaIso8601([Fecha])),
+  #"SemanaIso a Entero" = Table.TransformColumnTypes(#"Add SemanaIso8601", {{"SemanaIso", Int64.Type}}),
+  
+  #"Add SemanaCalendario" = 
+    Table.AddColumn(
+        #"SemanaIso a Entero",
+        "Semana",
+        each if 
+        Number.From([SemanaIso]) >= 52 and [MesNumero] = 1 or
+        Number.From([SemanaIso]) = 1 and [MesNumero] = 12
+        
+            then 0
+            else [SemanaIso]
+    ),
+  
+  SemanaCalenarioAEntero = Table.TransformColumnTypes(#"Add SemanaCalendario", {{"Semana", Int64.Type}}),
+  #"SemanaCalendarioCopy=Week" = Table.DuplicateColumn(SemanaCalenarioAEntero, "Semana", "Week"),
+  TablaSemanasFinalizada = #"SemanaCalendarioCopy=Week",
+  SemanaActualIndice = #"SemanaCalendarioCopy=Week"{[Fecha = FechaActual]}?[IndiceSemana],
+  // *-----------------------------------------------------------------------------------------------------------------------------*//
+  #"----Añadir Columnas de Desvíos----" = #"SemanaActualIndice",
+  #"Add DesvioSemanaActual" = Table.AddColumn(TablaSemanasFinalizada, "DesvioSemanaActual", each [IndiceSemana] - SemanaActualIndice, Int64.Type),
+  #"Add Desvio Año" = Table.AddColumn(#"Add DesvioSemanaActual", "DesvíoAñoActual", each Date.Year([Fecha]) - Date.Year(FechaActual), Int64.Type),
+  #"Add Fechas Futuras" = Table.AddColumn(#"Add Desvio Año", "FechaFutura", each if [Fecha] > FechaActual then "Futuro" else "Pasado"),
+  #"Transformar columnas" = Table.TransformColumnTypes(#"Add Fechas Futuras", {{"FechaFutura", type text}, {"MesCortoAño", type text}, {"MesLargoAño", type text}}),
+  #"Add Desvio Mes" = Table.AddColumn(#"Transformar columnas", "DesvioMesActual", each ( Date.Year([Fecha]) - Date.Year( FechaActual )  ) * 12  +
+                Date.Month( [Fecha] ) - Date.Month( FechaActual ), Int64.Type),
+  #"==Añadir Otras Columnas ==" = #"Add Desvio Mes",
+  #"Add AñoMesSemanaIso_Numero" = Table.AddColumn(#"==Añadir Otras Columnas ==", "AñoMesSemanaIso_Numero", each [AñoMesNumero] * 100 + Number.From( [SemanaIso] ), Int64.Type),
+  #"Add AñoMesSemanaCalendario_Numero" = Table.AddColumn(#"Add AñoMesSemanaIso_Numero", "AñoMesSemanaCalendario_Numero", each [AñoMesNumero] * 100 + [Semana], Int64.Type),
+  #"Add Año-MesNumero" = Table.AddColumn(#"Add AñoMesSemanaCalendario_Numero", "Año-MesNumero", each Text.Combine({Text.From([Año]), Text.From([MesNumero])}, "-"), type text),
+  #"Add Año-NombreMesCorto" = Table.AddColumn(#"Add Año-MesNumero", "Año-NombreMesCorto", each Text.Combine({Text.From([Año]), [NombreMesCorto]}, "-"), type text),
+  #"Add Año-SemanaIso" = Table.AddColumn(#"Add Año-NombreMesCorto", "Año-SemanaIso", each Text.Combine({Text.From([Año]), Text.From([SemanaIso])}, "-"), type text),
+  #"Add Año-Semana" = Table.AddColumn(#"Add Año-SemanaIso", "Año-Semana", each Text.Combine({Text.From([Año]), Text.From([Semana])}, "-"), type text),
+  #"Add YTD_Flag" = Table.AddColumn(#"Add Año-Semana", "Flag_YTD", each if Date.DayOfYear([Fecha]) <= Date.DayOfYear(FechaActual) then "YTD" else null),
+  #"Add MTD_Flag" = Table.AddColumn(#"Add YTD_Flag", "Flag_MTD", each if Date.Day([Fecha]) <= Date.Day(FechaActual) then "MTD" else null),
+  #"Add DesvioFechaActual" = Table.AddColumn(#"Add MTD_Flag", "DesvioFechaActual", each [Fecha] - FechaActual),
+  DesvioFActualTipoCambiado = Table.TransformColumnTypes(#"Add DesvioFechaActual", {{"DesvioFechaActual", Int64.Type}}),
+  #"Add EsDiaActual" = Table.TransformColumnTypes(Table.AddColumn(DesvioFActualTipoCambiado, "EsDiaActual", each if [Fecha] >= Date.From(DateTime.LocalNow()) then 1 else 0), {{"EsDiaActual", Int64.Type}}),
+  // -----------------------------------------------------------------------------------------------------------
+  #"Combinar Festivos Colombia" = Table.NestedJoin(#"Add EsDiaActual", {"Fecha"}, T_Festivos_Colombia, {"Fecha"}, "T_Festivos_Colombia", JoinKind.LeftOuter),
+  #"T_Festivos_Colombia expandido" = Table.ExpandTableColumn(#"Combinar Festivos Colombia", "T_Festivos_Colombia", {"Festividad"}, {"Festividad-Colombia"}),
+  #"Reemplazar  FestCol" = Table.ReplaceValue(#"T_Festivos_Colombia expandido", null, "SinFest", Replacer.ReplaceValue, {"Festividad-Colombia"}),
+  #"Combinar Festivos Peru" = Table.NestedJoin(#"Reemplazar  FestCol", {"Fecha"}, T_Festivos_Peru, {"Fecha"}, "T_Festivos_Peru", JoinKind.LeftOuter),
+  #"T_Festivos_Peru expandido" = Table.ExpandTableColumn(#"Combinar Festivos Peru", "T_Festivos_Peru", {"Festividad"}, {"Festividad-Peru"}),
+  #"Reemplazar nulls FestPer" = Table.ReplaceValue(#"T_Festivos_Peru expandido", null, "SinFest", Replacer.ReplaceValue, {"Festividad-Peru"}),
+  #"Combinar Festivos Panama" = Table.NestedJoin(#"Reemplazar nulls FestPer", {"Fecha"}, T_Festivos_Panama, {"Fecha"}, "T_Festivos_Panama", JoinKind.LeftOuter),
+  #"T_Festivos_Panama expandido" = Table.ExpandTableColumn(#"Combinar Festivos Panama", "T_Festivos_Panama", {"Festividad"}, {"Festividad-Panama"}),
+  #"Reemplazar nulls FestPan" = Table.ReplaceValue(#"T_Festivos_Panama expandido", null, "SinFest", Replacer.ReplaceValue, {"Festividad-Panama"}),
+  #"Transformar columnas 1" = Table.TransformColumnTypes(#"Reemplazar nulls FestPan", {{"EsFinDeSemana", type text}, {"Flag_YTD", type text}, {"Flag_MTD", type text}, {"Festividad-Colombia", type text}, {"Festividad-Peru", type text}, {"Festividad-Panama", type text}}),
+  #"Reemplazar errores" = Table.ReplaceErrorValues(#"Transformar columnas 1", {{"EsFinDeSemana", null}, {"Flag_YTD", null}, {"Flag_MTD", null}, {"Festividad-Colombia", null}, {"Festividad-Peru", null}, {"Festividad-Panama", null}})
+in
+  #"Reemplazar errores"
