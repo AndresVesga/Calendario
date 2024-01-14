@@ -1,12 +1,12 @@
-/*Este calendario ha sido creado para consumir desde DataFlows de Power Bi*/
 let
   // ****Calendario creado por Fabián Andrés Garzón Vesga
   #"Creación de Nuevo Calendario Popsy" = 1,
   StartDate = #date(AñoInicio, 1, 1),
   EndDate = Date.EndOfYear(DateTime.Date(DateTime.FixedLocalNow())),
-  // A continuación, se añade parámetro: FechaActual para realizar campos calculados de desvíos.
+  //** A continuación, se añade parámetro: FechaActual para realizar campos calculados de desvíos.**//
   FechaActual = DateTime.Date(DateTime.FixedLocalNow()),
   // *-----------------------------------------------------------------------------------------------------------------------------*//
+
   #"----Proceso de creación de tabla Calendario----" = 1,
   ListDates = List.Dates(StartDate, Number.From(EndDate - StartDate) +1, #duration(1,0,0,0)),
   #"Convertir a Tabla" = Table.FromList(ListDates, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
@@ -59,7 +59,9 @@ let
   #"SemanaCalendarioCopy=Week" = Table.DuplicateColumn(SemanaCalenarioAEntero, "Semana", "Week"),
   TablaSemanasFinalizada = #"SemanaCalendarioCopy=Week",
   SemanaActualIndice = #"SemanaCalendarioCopy=Week"{[Fecha = FechaActual]}?[IndiceSemana],
+
   // *-----------------------------------------------------------------------------------------------------------------------------*//
+
   #"----Añadir Columnas de Desvíos----" = #"SemanaActualIndice",
   #"Add DesvioSemanaActual" = Table.AddColumn(TablaSemanasFinalizada, "DesvioSemanaActual", each [IndiceSemana] - SemanaActualIndice, Int64.Type),
   #"Add Desvio Año" = Table.AddColumn(#"Add DesvioSemanaActual", "DesvíoAñoActual", each Date.Year([Fecha]) - Date.Year(FechaActual), Int64.Type),
@@ -79,7 +81,8 @@ let
   #"Add DesvioFechaActual" = Table.AddColumn(#"Add MTD_Flag", "DesvioFechaActual", each [Fecha] - FechaActual),
   DesvioFActualTipoCambiado = Table.TransformColumnTypes(#"Add DesvioFechaActual", {{"DesvioFechaActual", Int64.Type}}),
   #"Add EsDiaActual" = Table.TransformColumnTypes(Table.AddColumn(DesvioFActualTipoCambiado, "EsDiaActual", each if [Fecha] >= Date.From(DateTime.LocalNow()) then 1 else 0), {{"EsDiaActual", Int64.Type}}),
-  // -----------------------------------------------------------------------------------------------------------
+
+    // *-----------------------------------------------------------------------------------------------------------------------------*//
   #"Combinar Festivos Colombia" = Table.NestedJoin(#"Add EsDiaActual", {"Fecha"}, T_Festivos_Colombia, {"Fecha"}, "T_Festivos_Colombia", JoinKind.LeftOuter),
   #"T_Festivos_Colombia expandido" = Table.ExpandTableColumn(#"Combinar Festivos Colombia", "T_Festivos_Colombia", {"Festividad"}, {"Festividad-Colombia"}),
   #"Reemplazar  FestCol" = Table.ReplaceValue(#"T_Festivos_Colombia expandido", null, "SinFest", Replacer.ReplaceValue, {"Festividad-Colombia"}),
