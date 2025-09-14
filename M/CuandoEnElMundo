@@ -1,0 +1,69 @@
+// =====================================================
+// Función: CuandoEnElMundo
+// Descripción:
+//   Obtiene el calendario de festividades de un país
+//   y año específico desde cuandoenelmundo.com.
+//
+// Parámetros:
+//   - anho (text): Año en formato "YYYY"
+//   - pais (text, opcional): nombre del país
+//     (ejemplo: "colombia", "mexico")
+//
+// Salida:
+//   Devuelve una tabla con:
+//     • Column1   -> Día del mes (número)
+//     • Column2   -> Mes (texto)
+//     • Festividad -> Nombre de la festividad
+//     • Dia-mes   -> Concatenación Día/Mes
+//
+// Ejemplo de uso:
+//   CuandoEnElMundo("2025", "colombia")
+// =====================================================
+
+let
+    Origen = (anho as text, optional pais as text) =>
+
+    let
+        // Construye la URL dinámica con parámetros de país y año
+        Origen = Web.Contents(
+            "https://www.cuandoenelmundo.com/calendario/",
+            [RelativePath = pais & "/" & anho]
+        ),
+
+        // Extrae la tabla HTML con selectores CSS
+        #"Tabla extraída a partir de HTML" = Html.Table(
+            Origen,
+            {
+                {"Column1", ".day"},         // Día numérico
+                {"Column2", ".day + *"},     // Mes
+                {"Column3", ".desc"}         // Nombre de la festividad
+            },
+            [RowSelector = ".hdays TR"]
+        ),
+
+        // Cambia tipos de datos
+        #"Tipo cambiado" = Table.TransformColumnTypes(
+            #"Tabla extraída a partir de HTML",
+            {
+                {"Column1", Int64.Type},
+                {"Column2", type text},
+                {"Column3", type text}
+            }
+        ),
+
+        // Agrega columna personalizada con formato Día/Mes
+        #"Personalizada agregada" = Table.AddColumn(
+            #"Tipo cambiado",
+            "Dia-mes",
+            each Number.ToText([Column1]) & "/" & [Column2]
+        ),
+
+        // Renombra columna de festividad
+        ColumnasNombreCambiado = Table.RenameColumns(
+            #"Personalizada agregada",
+            {{"Column3", "Festividad"}}
+        )
+    in
+        ColumnasNombreCambiado
+in
+    Origen
