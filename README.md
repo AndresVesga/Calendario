@@ -26,4 +26,4 @@ Este repositorio contiene un conjunto de **funciones y tablas en lenguaje M (Pow
 
 1. Descarga o clona este repositorio.  
    ```bash
-   git clone https://github.com/<tu-usuario>/<nombre-repo>.git
+   git clone https://github.com/AndresVesga/Calendario
