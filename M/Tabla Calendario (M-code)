@@ -1,3 +1,37 @@
+// =====================================================
+// Script: TablaCalendario
+// Autor: Fabián Andrés Garzón Vesga
+//
+// Descripción:
+//   Genera una tabla calendario completa con métricas
+//   de tiempo, banderas de periodo (YTD, MTD),
+//   desviaciones respecto a la fecha actual,
+//   semanas ISO y comparativos de fechas por país.
+//
+// Parámetros requeridos:
+//   - AñoInicio (number): Año inicial para generar el calendario.
+//
+// Dependencias:
+//   - Función: SemanaIso8601 (devuelve la semana ISO de una fecha).
+//   - Tablas de Festivos: T_Festivos_Colombia, T_Festivos_Peru,
+//     T_Festivos_Panama.
+//   - Tablas de Fechas Comparables: FechasComparables_Colombia,
+//     FechasComparables_Perú, FechasComparables_Panamá.
+//
+// Salida:
+//   Tabla con las siguientes columnas clave:
+//     • Fecha (tipo date)
+//     • Año, MesNumero, NombreMesCorto, NombreMesLargo
+//     • Trimestre, Semestre
+//     • Día de la semana, NombreDiaLargo, NombreDiaCorto
+//     • Semana, SemanaIso, IndiceSemana
+//     • DesvioSemanaActual, DesvíoAñoActual, DesvioMesActual
+//     • Flags: YTD, MTD, EsDiaActual, EsSemanaActual
+//     • Festividad-Colombia, Festividad-Peru, Festividad-Panama
+//     • Campos compuestos: AñoMesNumero, AñoMesSemanaIso_Numero, etc.
+//
+// =====================================================
+
 let
   // ****Calendario creado por Fabián Andrés Garzón Vesga
   #"Creación de Nuevo Calendario" = 1,
