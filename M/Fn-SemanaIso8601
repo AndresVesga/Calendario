@@ -1,0 +1,70 @@
+// =====================================================
+// Función: getISO8601Week
+// Descripción:
+//   Calcula el número de semana de una fecha según la
+//   norma ISO 8601 (semanas que inician en lunes, la
+//   primera semana del año es la que contiene el 4 de enero).
+//
+// Parámetros:
+//   - someDate (date): Fecha a evaluar.
+//
+// Salida:
+//   - Devuelve un texto de dos dígitos ("01", "02", ..., "53")
+//     que representa la semana ISO 8601 de la fecha.
+//
+// Ejemplo de uso:
+//   getISO8601Week(#date(2025, 1, 5)) => "01"
+//   getISO8601Week(#date(2025, 12, 31)) => "01" o "53" según corresponda.
+//
+// Referencias:
+//   - Implementación adaptada de: http://stackoverflow.com/a/34092382/2014893
+// =====================================================
+
+let
+    getISO8601Week = (someDate as date) =>
+
+        let
+            // Calcula el día de la semana (lunes = 1, domingo = 7)
+            getDayOfWeek = (d as date) =>
+                let
+                    result = 1 + Date.DayOfWeek(d, Day.Monday)
+                in
+                    result,
+
+            // Calcula la semana "naive" (sin considerar bordes de año)
+            getNaiveWeek = (inDate as date) =>
+                let
+                    weekday = getDayOfWeek(inDate),
+                    weekdayOfJan4th = getDayOfWeek(#date(Date.Year(inDate), 1, 4)),
+                    ordinal = Date.DayOfYear(inDate),
+                    naiveWeek = Number.RoundDown((ordinal - weekday + 10) / 7)
+                in
+                    naiveWeek,
+
+            thisYear = Date.Year(someDate),
+            priorYear = thisYear - 1,
+
+            nwn = getNaiveWeek(someDate),
+
+            // Última semana del año anterior y del actual
+            lastWeekOfPriorYear = getNaiveWeek(#date(priorYear, 12, 28)),
+            lastWeekOfThisYear = getNaiveWeek(#date(thisYear, 12, 28)),
+
+            // Determina a qué año pertenece la semana
+            weekYear =
+                if nwn < 1 then priorYear
+                else if nwn > lastWeekOfThisYear then thisYear + 1
+                else thisYear,
+
+            // Determina el número de la semana
+            weekNumber =
+                if nwn < 1 then lastWeekOfPriorYear
+                else if nwn > lastWeekOfThisYear then 1
+                else nwn,
+
+            // Devuelve número de semana con 2 dígitos
+            week_dateString = Text.PadStart(Text.From(Number.RoundDown(weekNumber)), 2, "0")
+        in
+            week_dateString
+in
+    getISO8601Week
