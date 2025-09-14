@@ -1,0 +1,136 @@
+// =====================================================
+// Script: dim_tiempo
+// Autor: Fabián Andrés Garzón Vesga
+//
+// Descripción:
+//   Crea una dimensión de tiempo con granularidad de 1 minuto
+//   para cubrir las 24 horas del día. Incluye atributos
+//   categóricos como hora, minuto, jornada, AM/PM, etiquetas,
+//   rangos horarios y banderas personalizadas (ej. horas pico).
+//
+// Parámetros:
+//   - Ninguno (genera siempre 1440 intervalos de 1 minuto).
+//
+// Salida:
+//   Tabla con columnas:
+//     • Intervalo_Horario -> Tiempo base en formato hh:mm:ss
+//     • Hora, Minuto
+//     • Jornada (Madrugada, Mañana, Tarde, Noche)
+//     • Order_Jornada (orden numérico de la jornada)
+//     • AM/PM
+//     • Etiqueta Hora (ej. "8:00", "8:30")
+//     • HorasPico (1 si está entre 9:00 y 23:00, de lo contrario 0)
+//     • rango_horario (ej. "6-9", "9-12", ...)
+//     • rango_horario_orden (1..6 para ordenar los rangos)
+//     • Llave (campo clave en formato "HH:mm")
+//
+// =====================================================
+
+let
+    // Tiempo inicial: 00:00
+    StartTime = #time(0, 0, 0),
+
+    // Total de intervalos = 1440 minutos en un día
+    NumberOfIntervals = 1440,
+
+    // Duración de cada intervalo = 1 minuto
+    IntervalDuration = #duration(0, 0, 1, 0),
+
+    // Lista de tiempos en el día
+    TimeList = List.Times(StartTime, NumberOfIntervals, IntervalDuration),
+
+    // Convertir lista a tabla
+    TimeTable = Table.FromList(TimeList, Splitter.SplitByNothing(), {"Intervalo_Horario"}),
+    ChangeType = Table.TransformColumnTypes(TimeTable, {{"Intervalo_Horario", type time}}),
+
+    // Atributos básicos
+    AddHour = Table.AddColumn(ChangeType, "Hora", each Time.Hour([Intervalo_Horario])),
+    AddMinute = Table.AddColumn(AddHour, "Minuto", each Time.Minute([Intervalo_Horario])),
+
+    // Jornada del día (categórica)
+    AddPeriod = Table.AddColumn(
+        AddMinute, 
+        "Jornada", 
+        each if Time.Hour([Intervalo_Horario]) < 6 then "Madrugada" 
+             else if Time.Hour([Intervalo_Horario]) < 12 then "Mañana" 
+             else if Time.Hour([Intervalo_Horario]) < 18 then "Tarde" 
+             else "Noche"
+    ),
+    AddOrderPeriod = Table.AddColumn(
+        AddPeriod, 
+        "Order_Jornada", 
+        each if Time.Hour([Intervalo_Horario]) < 6 then 0 
+             else if Time.Hour([Intervalo_Horario]) < 12 then 1 
+             else if Time.Hour([Intervalo_Horario]) < 18 then 2 
+             else 3
+    ),
+
+    // AM/PM
+    AddAMPM = Table.AddColumn(AddOrderPeriod, "AM/PM", each if Time.Hour([Intervalo_Horario]) < 12 then "AM" else "PM"),
+
+    // Etiqueta de hora (hh:00 / hh:30)
+    AddHourLabel = Table.AddColumn(
+        AddAMPM, 
+        "Etiqueta Hora", 
+        each if [Minuto] >= 0 and [Minuto] <= 29 
+             then Number.ToText([Hora]) & ":00" 
+             else Number.ToText([Hora]) & ":30"
+    ),
+
+    // Conversión de tipos
+    DataTypes = Table.TransformColumnTypes(
+        AddHourLabel, 
+        {
+            {"Hora", type text}, 
+            {"Minuto", type text}, 
+            {"Jornada", type text}, 
+            {"AM/PM", type text}, 
+            {"Etiqueta Hora", type text}, 
+            {"Order_Jornada", Int64.Type}
+        }
+    ),
+
+    // Horas pico (9:00 a 23:00)
+    AddHorasPico = Table.AddColumn(DataTypes, "HorasPico", each if Number.From([Hora]) >= 9 and Number.From([Hora]) <= 23 then 1 else 0),
+    HorasPicoTypeText = Table.TransformColumnTypes(AddHorasPico, {{"HorasPico", type text}}),
+
+    // Rango horario (bloques de 3 horas)
+    Add_Rango_horario = Table.AddColumn(
+        HorasPicoTypeText, 
+        "rango_horario", 
+        each let hora = Time.Hour([Intervalo_Horario]) in
+            if hora >= 6 and hora < 9 then "6-9"
+            else if hora >= 9 and hora < 12 then "9-12"
+            else if hora >= 12 and hora < 15 then "12-15"
+            else if hora >= 15 and hora < 18 then "15-18"
+            else if hora >= 18 and hora < 21 then "18-21"
+            else "21+", 
+        type text
+    ),
+
+    // Orden para rango horario
+    Add_Rango_horario_order = Table.AddColumn(
+        Add_Rango_horario, 
+        "rango_horario_orden", 
+        each let hora = Time.Hour([Intervalo_Horario]) in
+            if hora >= 6 and hora < 9 then 1
+            else if hora >= 9 and hora < 12 then 2
+            else if hora >= 12 and hora < 15 then 3
+            else if hora >= 15 and hora < 18 then 4
+            else if hora >= 18 and hora < 21 then 5
+            else 6,
+        Int64.Type
+    ),
+
+    // Llave en formato "HH:mm"
+    AddLlave = Table.AddColumn(
+        Add_Rango_horario_order, 
+        "Llave", 
+        each Text.PadStart(Text.From(Time.Hour([Intervalo_Horario])), 2, "0") 
+           & ":" & Text.PadStart(Text.From(Time.Minute([Intervalo_Horario])), 2, "0")
+    ),
+
+    // Conversión final
+    #"Tipo de columna cambiado" = Table.TransformColumnTypes(AddLlave, {{"Llave", type text}})
+in
+    #"Tipo de columna cambiado"
