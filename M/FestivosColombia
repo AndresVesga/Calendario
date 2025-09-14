@@ -1,0 +1,106 @@
+// =====================================================
+// Script: CalendarioFestividadesPorRango
+// Descripción:
+//   Genera un calendario consolidado de festividades
+//   para un rango de años en Colombia utilizando
+//   la función personalizada CuandoEnElMundo.
+//
+// Parámetros requeridos (deben estar definidos en el entorno):
+//   - AñoInicio (number): Año inicial del rango.
+//   - AñoFin (number): Año final del rango.
+//
+// Dependencias:
+//   - Función: CuandoEnElMundo(anho as text, optional pais as text)
+//
+// Salida:
+//   Devuelve una tabla con:
+//     • Año        -> Año en texto
+//     • Colombia   -> Nombre del país (fijo "colombia")
+//     • Festividad -> Nombre de la festividad
+//     • Dia-mes    -> Día/Mes en texto
+//     • Fecha      -> Fecha completa en formato date
+//
+// =====================================================
+
+let
+    // Genera la lista de años desde AñoInicio hasta AñoFin
+    Origen = {AñoInicio..AñoFin},
+
+    // Convierte la lista en tabla
+    #"Convertida en tabla" = Table.FromList(
+        Origen,
+        Splitter.SplitByNothing(),
+        null,
+        null,
+        ExtraValues.Error
+    ),
+
+    // Renombra la columna
+    #"Columnas con nombre cambiado" = Table.RenameColumns(
+        #"Convertida en tabla",
+        {{"Column1", "Año"}}
+    ),
+
+    // Ajusta tipo de datos
+    #"Tipo cambiado" = Table.TransformColumnTypes(
+        #"Columnas con nombre cambiado",
+        {{"Año", type text}}
+    ),
+
+    // Agrega columna fija con país = "colombia"
+    #"Personalizado agregado" = Table.TransformColumnTypes(
+        Table.AddColumn(#"Tipo cambiado", "colombia", each "colombia"),
+        {{"colombia", type text}}
+    ),
+
+    // Invoca la función personalizada CuandoEnElMundo
+    #"Función personalizada invocada" = Table.AddColumn(
+        #"Personalizado agregado",
+        "Función personalizada invocada",
+        each CuandoEnElMundo([Año], [colombia])
+    ),
+
+    // Expande las columnas de la función
+    #"Función personalizada invocada expandido" = Table.ExpandTableColumn(
+        #"Función personalizada invocada",
+        "Función personalizada invocada",
+        {"Festividad", "Dia-mes"},
+        {"Festividad", "Dia-mes"}
+    ),
+
+    // Crea columna Fecha combinando Día-Mes y Año
+    #"Columna combinada insertada" = Table.AddColumn(
+        #"Función personalizada invocada expandido",
+        "Fecha",
+        each Text.Combine({Text.From([#"Dia-mes"]), [Año]}, "/"),
+        type text
+    ),
+
+    // Convierte la columna Fecha a tipo date
+    #"Tipo de columna cambiado" = Table.TransformColumnTypes(
+        #"Columna combinada insertada",
+        {{"Fecha", type date}}
+    ),
+
+    // Ajusta tipos de las demás columnas
+    #"Transformar columnas" = Table.TransformColumnTypes(
+        #"Tipo de columna cambiado",
+        {
+            {"Festividad", type text},
+            {"Dia-mes", type text}
+        }
+    ),
+
+    // Reemplaza valores de error con null
+    #"Reemplazar errores" = Table.ReplaceErrorValues(
+        #"Transformar columnas",
+        {{"Festividad", null}, {"Dia-mes", null}}
+    ),
+
+    // Elimina registros duplicados por Fecha
+    #"Duplicados quitados" = Table.Distinct(
+        #"Reemplazar errores",
+        {"Fecha"}
+    )
+in
+    #"Duplicados quitados"
